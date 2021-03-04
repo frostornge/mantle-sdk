@@ -8,6 +8,14 @@ type TestQuery struct {
 	}
 }
 
+type TestSliceQuery struct {
+	TestSliceIndexer []TestQuery
+}
+
+type TestMapQuery struct {
+	TestMapIndexer map[string]TestQuery
+}
+
 // single
 var _ Indexer = TestIndexer{}
 
@@ -49,13 +57,15 @@ type TestSliceIndexer []TestIndexer
 
 func (i TestSliceIndexer) Name() string { return "" }
 func (i TestSliceIndexer) Index(q Querier, c Committer) error {
-	var req []TestQuery
+	var req struct {
+		TestSliceIndexer []TestQuery
+	}
 	if err := q(&req, nil); err != nil {
 		return err
 	}
 
 	var entity TestSliceIndexer
-	for _, r := range req {
+	for _, r := range req.TestSliceIndexer {
 		entity = append(
 			entity,
 			TestIndexer{
@@ -83,13 +93,15 @@ type TestMapIndexer map[string]TestIndexer
 
 func (i TestMapIndexer) Name() string { return "" }
 func (i TestMapIndexer) Index(q Querier, c Committer) error {
-	var req map[string]TestQuery
+	var req struct {
+		TestMapIndexer map[string]TestQuery
+	}
 	if err := q(&req, nil); err != nil {
 		return err
 	}
 
 	entity := make(TestMapIndexer)
-	for k, r := range req {
+	for k, r := range req.TestMapIndexer {
 		entity[k] = TestIndexer{
 			Foo: r.Foo,
 			Bar: struct {

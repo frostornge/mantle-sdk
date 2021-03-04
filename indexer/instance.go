@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
 
 	"github.com/terra-project/mantle-sdk/graph"
 	"github.com/terra-project/mantle-sdk/graph/generate"
 	"github.com/terra-project/mantle-sdk/types"
-
 	mttypes "github.com/terra-project/mantle-sdk/types"
+	"golang.org/x/sync/errgroup"
 )
 
 type Instance interface {
@@ -36,27 +35,14 @@ func NewBaseInstance(
 }
 
 func (instance baseInstance) RunRound() {
-	// create wait group for ALL indexers
-	wg := sync.WaitGroup{}
-	wg.Add(len(instance.indexers))
-
+	g := new(errgroup.Group)
 	for _, indexer := range instance.indexers {
-		go func(i Indexer) {
-			defer wg.Done()
-
-			q := buildQuerier(
-				instance.querier,
-				[]mttypes.Model{reflect.ValueOf(i).Type()},
-			)
-			c := buildCommitter(instance.committer)
-
-			if err := i.Index(q, c); err != nil {
-				panic(err)
-			}
-		}(indexer)
+		g.Go(instance.buildIndexerRunner(indexer))
 	}
 
-	wg.Wait()
+	if err := g.Wait(); err != nil {
+		panic(err)
+	}
 }
 
 func buildQuerier(querier mttypes.GraphQLQuerier, output []mttypes.Model) Querier {
@@ -83,5 +69,20 @@ func buildQuerier(querier mttypes.GraphQLQuerier, output []mttypes.Model) Querie
 func buildCommitter(committer types.GraphQLCommitter) Committer {
 	return func(entity interface{}) error {
 		return committer(entity)
+	}
+}
+
+func (instance baseInstance) buildIndexerRunner(i Indexer) func() error {
+	return func() error {
+		q := buildQuerier(
+			instance.querier,
+			[]mttypes.Model{reflect.ValueOf(i).Type()},
+		)
+		c := buildCommitter(instance.committer)
+
+		if err := i.Index(q, c); err != nil {
+			return err
+		}
+		return nil
 	}
 }

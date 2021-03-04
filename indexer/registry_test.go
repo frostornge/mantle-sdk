@@ -8,7 +8,7 @@ import (
 
 func TestRegistry(t *testing.T) {
 	Convey("init test", t, func() {
-		Convey("#register", func() {
+		Convey("#RegisterIndexer", func() {
 			testCases := map[string]struct {
 				Name    string
 				Indexer Indexer

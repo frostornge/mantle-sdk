@@ -1,99 +1,147 @@
 package indexer
 
 import (
-	"fmt"
+	"reflect"
 	"testing"
 
-	"github.com/terra-project/mantle-sdk/graph"
+	"github.com/graphql-go/graphql"
+	"github.com/graphql-go/graphql/gqlerrors"
+	"github.com/pkg/errors"
+	. "github.com/smartystreets/goconvey/convey"
 	"github.com/terra-project/mantle-sdk/types"
 )
 
-type BaseState struct {
-	Foo string
-	Bar string
-	Idx int
+func recoverAndErr(fn func()) string {
+	msg := ""
+	func() {
+		defer func() {
+			if err := recover(); err != nil {
+				msg = err.(error).Error()
+			}
+		}()
+		fn()
+	}()
+	return msg
 }
 
-func createGraphQLInstance() *graph.GraphQLInstance {
-	var baseState = BaseState{
-		Foo: "foo",
-		Bar: "bar",
-		Idx: 1,
-	}
+func TestInstance(t *testing.T) {
+	Convey("init test", t, func() {
+		indexers := []Indexer{
+			TestIndexer{},
+			TestSliceIndexer{},
+			TestMapIndexer{},
+		}
+		defaultQuerier := types.GraphQLQuerier(
+			func(q string, v types.GraphQLParams, d []types.Model) *graphql.Result {
+				return &graphql.Result{
+					Data: map[string]interface{}{},
+				}
+			},
+		)
+		defaultCommitter := types.GraphQLCommitter(
+			func(e interface{}) error {
+				return nil
+			},
+		)
 
-	// create gql instance for query resolution
-	gqlInstance := graph.NewGraphQLInstance(baseState)
-	gqlInstance.UpdateState("BaseState", baseState)
+		Convey("#RunRound", func() {
+			testCases := map[string]struct {
+				Name    string
+				Indexer Indexer
+				Result  *graphql.Result
+			}{
+				"should process single index": {
+					Name:    "TestIndexer",
+					Indexer: TestIndexer{},
+					Result: &graphql.Result{
+						Data: map[string]interface{}{
+							"Foo": "hello",
+							"Bar": map[string]interface{}{
+								"Hello":  64,
+								"Mantle": "World",
+							},
+						},
+					},
+				},
+				"should process slice index": {
+					Name:    "TestSliceIndexer",
+					Indexer: TestSliceIndexer{},
+					Result: &graphql.Result{
+						Data: map[string]interface{}{
+							"TestSliceIndexer": []map[string]interface{}{{
+								"Foo": "hello",
+								"Bar": map[string]interface{}{
+									"Hello":  64,
+									"Mantle": "World",
+								},
+							}},
+						},
+					},
+				},
+				"should process map index": {
+					Name:    "TestMapIndexer",
+					Indexer: TestMapIndexer{},
+					Result: &graphql.Result{
+						Data: map[string]interface{}{
+							"TestMapIndexer": map[string]map[string]interface{}{
+								"test": {
+									"Foo": "hello",
+									"Bar": map[string]interface{}{
+										"Hello":  64,
+										"Mantle": "World",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			for title, testCase := range testCases {
+				Convey(title, func() {
+					instance := NewBaseInstance(
+						[]Indexer{testCase.Indexer},
+						func(q string, v types.GraphQLParams, d []types.Model) *graphql.Result {
+							return testCase.Result
+						},
+						func(e interface{}) error {
+							name := reflect.ValueOf(e).Type().Name()
+							if name != testCase.Name {
+								return errors.Errorf("%s, %s", name, testCase.Name)
+							}
+							return nil
+						},
+					)
+					instance.RunRound()
+				})
+			}
+			Convey("should panic if querier returns error", func() {
+				instance := NewBaseInstance(
+					indexers,
+					func(q string, v types.GraphQLParams, d []types.Model) *graphql.Result {
+						return &graphql.Result{
+							Errors: []gqlerrors.FormattedError{{
+								Message: "TestError",
+							}},
+						}
+					},
+					defaultCommitter,
+				)
 
-	return gqlInstance
-}
+				msg := recoverAndErr(instance.RunRound)
+				So(msg, ShouldNotBeEmpty)
+				So(msg, ShouldContainSubstring, "TestError")
+			})
+			Convey("should panic if committer returns error", func() {
+				instance := NewBaseInstance(
+					indexers,
+					defaultQuerier,
+					func(e interface{}) error { return errors.New("TestError") },
+				)
 
-func DBG(t *testing.T) {
-	gqlInstance := createGraphQLInstance()
-	gqlInstance.ServeHTTP()
-}
-
-func TestRunIndexerRound(t *testing.T) {
-	gqlInstance := createGraphQLInstance()
-
-	baseInstance := NewBaseInstance(
-		[]types.Indexer{
-			testIndexer1,
-			testIndexer2,
-		},
-		gqlInstance.ResolveQuery,
-		gqlInstance.Commit,
-	)
-
-	baseInstance.RunIndexerRound()
-
-	states := gqlInstance.ExportStates()
-	fmt.Println(states)
-}
-
-//////////////////////////////////////////
-type TestEntity1 struct {
-	Field1 string
-	Field2 int
-}
-type TestEntity2 struct {
-	Field1 string
-	Field2 TestEntity2SubStruct
-}
-type TestEntity2SubStruct struct {
-	Data string
-}
-
-/// TestIndexer1
-type Test1Query struct {
-	BaseState BaseState
-}
-
-func testIndexer1(query types.Query, commit types.Commit) {
-	request := Test1Query{}
-	query(&request, nil)
-
-	entity := TestEntity1{
-		Field1: request.BaseState.Foo,
-		Field2: request.BaseState.Idx,
-	}
-	commit(entity)
-}
-
-// TestIndexer2
-type TestQuery2 struct {
-	BaseState BaseState
-}
-
-func testIndexer2(query types.Query, commit types.Commit) {
-	request := TestQuery2{}
-	query(&request, nil)
-
-	entity := TestEntity2{
-		Field1: request.BaseState.Foo,
-		Field2: TestEntity2SubStruct{
-			Data: request.BaseState.Bar,
-		},
-	}
-	commit(entity)
+				msg := recoverAndErr(instance.RunRound)
+				So(msg, ShouldNotBeEmpty)
+				So(msg, ShouldContainSubstring, "TestError")
+			})
+		})
+	})
 }
