@@ -1,118 +1,55 @@
 package indexer
 
 import (
-	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/terra-project/mantle-sdk/types"
+	. "github.com/smartystreets/goconvey/convey"
 )
 
-func TestNewRegistry(t *testing.T) {
-	// single entity
-	func() {
-		type Entity struct {
-			Foo string
-			Bar struct {
-				Hello  uint64 `index:"hello"`
-				Mantle string `index:"custom"`
+func TestRegistry(t *testing.T) {
+	Convey("init test", t, func() {
+		Convey("#register", func() {
+			testCases := map[string]struct {
+				Name    string
+				Indexer Indexer
+			}{
+				"should register single entity": {
+					Name:    "TestIndexer",
+					Indexer: TestIndexer{},
+				},
+				"should register slice entity": {
+					Name:    "TestSliceIndexer",
+					Indexer: TestSliceIndexer{},
+				},
+				"should register map entity": {
+					Name:    "TestMapIndexer",
+					Indexer: TestMapIndexer{},
+				},
 			}
-		}
-		indexer := func(q types.Query, c types.Commit) error {
-			return nil
-		}
+			for title, testCase := range testCases {
+				Convey(title, func() {
+					registry := NewRegistry()
+					registry.RegisterIndexer(testCase.Indexer)
 
-		registry := indexer2.NewRegistry([]types.IndexerRegisterer{
-			func(register types.Register) {
-				register(
-					indexer,
-					reflect.TypeOf((*Entity)(nil)),
-				)
-			},
-		})
+					So(registry.Indexers(), ShouldHaveLength, 1)
+					So(registry.Models(), ShouldHaveLength, 1)
+					So(registry.KVIndexMap(), ShouldHaveLength, 2) // with BaseState
 
-		assert.Equal(t, 1, len(registry.Indexers))
-		assert.Equal(t, 1, len(registry.IndexerOutputs))
-		assert.Equal(t, 1, len(registry.Models))
-		assert.Equal(t, 2, len(registry.KVIndexMap)) // always includes BaseState
+					kvi, ok := registry.KVIndexMap()[testCase.Name]
+					So(ok, ShouldBeTrue)
 
-		kvi, ok := registry.KVIndexMap["Entity"]
-		assert.True(t, ok)
-
-		assert.NotNil(t, kvi.GetIndexEntry("hello"))
-		assert.NotNil(t, kvi.GetIndexEntry("custom"))
-	}()
-
-	// slice entity
-	func() {
-		type Entity struct {
-			Foo string
-			Bar struct {
-				Hello  uint64 `index:"hello"`
-				Mantle string `index:"custom"`
+					cases := map[string]string{
+						"Hello":  "uint64",
+						"Mantle": "string",
+					}
+					for indexName, indexType := range cases {
+						entry, ok := kvi.Entry(indexName)
+						So(ok, ShouldBeTrue)
+						So(entry, ShouldNotBeNil)
+						So(entry.Type().Name(), ShouldEqual, indexType)
+					}
+				})
 			}
-		}
-		type Entities []Entity
-
-		indexer := func(q types.Query, c types.Commit) error {
-			return nil
-		}
-
-		registry := indexer2.NewRegistry([]types.IndexerRegisterer{
-			func(register types.Register) {
-				register(
-					indexer,
-					reflect.TypeOf((*Entities)(nil)),
-				)
-			},
 		})
-
-		assert.Equal(t, 1, len(registry.Indexers))
-		assert.Equal(t, 1, len(registry.IndexerOutputs))
-		assert.Equal(t, 1, len(registry.Models))
-		assert.Equal(t, 2, len(registry.KVIndexMap)) // always includes BaseState
-
-		kvi, ok := registry.KVIndexMap["Entities"]
-		assert.True(t, ok)
-
-		assert.NotNil(t, kvi.GetIndexEntry("hello"))
-		assert.NotNil(t, kvi.GetIndexEntry("custom"))
-	}()
-
-	// map entity
-	func() {
-		type Entity struct {
-			Foo string
-			Bar struct {
-				Hello  uint64 `index:"hello"`
-				Mantle string `index:"custom""`
-			}
-		}
-		type Entities map[string]Entity
-
-		indexer := func(q types.Query, c types.Commit) error {
-			return nil
-		}
-
-		registry := indexer2.NewRegistry([]types.IndexerRegisterer{
-			func(register types.Register) {
-				register(
-					indexer,
-					reflect.TypeOf((*Entities)(nil)),
-				)
-			},
-		})
-
-		assert.Equal(t, 1, len(registry.Indexers))
-		assert.Equal(t, 1, len(registry.IndexerOutputs))
-		assert.Equal(t, 1, len(registry.Models))
-		assert.Equal(t, 2, len(registry.KVIndexMap)) // always includes BaseState
-
-		kvi, ok := registry.KVIndexMap["Entities"]
-		assert.True(t, ok)
-
-		assert.NotNil(t, kvi.GetIndexEntry("hello"))
-		assert.NotNil(t, kvi.GetIndexEntry("custom"))
-	}()
-
+	})
 }
