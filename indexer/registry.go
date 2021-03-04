@@ -14,7 +14,7 @@ type Registry interface {
 	RegisterIndexer(indexers ...Indexer)
 }
 
-type registry struct {
+type baseRegistry struct {
 	indexers   []Indexer
 	models     []mttypes.Model
 	kvIndexMap kvindex.KVIndexMap
@@ -28,18 +28,18 @@ func NewRegistry() Registry {
 		panic(blockStateKVIndexErr)
 	}
 
-	return &registry{
+	return &baseRegistry{
 		indexers:   []Indexer{},
 		models:     []mttypes.Model{},
 		kvIndexMap: kvindex.NewKVIndexMap(blockStateKVIndex),
 	}
 }
 
-func (r registry) Indexers() []Indexer            { return r.indexers }
-func (r registry) Models() []mttypes.Model        { return r.models }
-func (r registry) KVIndexMap() kvindex.KVIndexMap { return r.kvIndexMap }
+func (r baseRegistry) Indexers() []Indexer            { return r.indexers }
+func (r baseRegistry) Models() []mttypes.Model        { return r.models }
+func (r baseRegistry) KVIndexMap() kvindex.KVIndexMap { return r.kvIndexMap }
 
-func (r *registry) RegisterIndexer(indexers ...Indexer) {
+func (r *baseRegistry) RegisterIndexer(indexers ...Indexer) {
 	for _, i := range indexers {
 		r.indexers = append(r.indexers, i)
 
