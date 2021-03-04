@@ -22,6 +22,7 @@ require (
 	github.com/onsi/gomega v1.7.0 // indirect
 	github.com/pelletier/go-toml v1.8.0 // indirect
 	github.com/rs/cors v1.7.0
+	github.com/smartystreets/goconvey v1.6.4
 	github.com/spf13/afero v1.2.2 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/spf13/viper v1.7.0
