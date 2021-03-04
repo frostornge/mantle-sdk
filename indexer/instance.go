@@ -14,7 +14,6 @@ import (
 )
 
 type Instance interface {
-	Register(indexers ...Indexer)
 	RunRound()
 }
 
@@ -22,7 +21,6 @@ type baseInstance struct {
 	indexers  []Indexer
 	committer mttypes.GraphQLCommitter
 	querier   mttypes.GraphQLQuerier
-	mutex     sync.Mutex
 }
 
 func NewBaseInstance(
@@ -30,26 +28,14 @@ func NewBaseInstance(
 	querier mttypes.GraphQLQuerier,
 	committer mttypes.GraphQLCommitter,
 ) Instance {
-	return &baseInstance{
+	return baseInstance{
 		indexers:  indexers,
 		committer: committer,
 		querier:   querier,
 	}
 }
 
-func (instance *baseInstance) Register(indexers ...Indexer) {
-	// wait until indexer round ends
-	instance.mutex.Lock()
-	defer instance.mutex.Unlock()
-
-	instance.indexers = append(instance.indexers, indexers...)
-}
-
-func (instance *baseInstance) RunRound() {
-	// fix indexers to run
-	instance.mutex.Lock()
-	defer instance.mutex.Unlock()
-
+func (instance baseInstance) RunRound() {
 	// create wait group for ALL indexers
 	wg := sync.WaitGroup{}
 	wg.Add(len(instance.indexers))
