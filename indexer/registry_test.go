@@ -1,4 +1,4 @@
-package registry
+package indexer
 
 import (
 	"reflect"
@@ -22,7 +22,7 @@ func TestNewRegistry(t *testing.T) {
 			return nil
 		}
 
-		registry := NewRegistry([]types.IndexerRegisterer{
+		registry := indexer2.NewRegistry([]types.IndexerRegisterer{
 			func(register types.Register) {
 				register(
 					indexer,
@@ -58,7 +58,7 @@ func TestNewRegistry(t *testing.T) {
 			return nil
 		}
 
-		registry := NewRegistry([]types.IndexerRegisterer{
+		registry := indexer2.NewRegistry([]types.IndexerRegisterer{
 			func(register types.Register) {
 				register(
 					indexer,
@@ -94,7 +94,7 @@ func TestNewRegistry(t *testing.T) {
 			return nil
 		}
 
-		registry := NewRegistry([]types.IndexerRegisterer{
+		registry := indexer2.NewRegistry([]types.IndexerRegisterer{
 			func(register types.Register) {
 				register(
 					indexer,

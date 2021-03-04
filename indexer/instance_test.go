@@ -36,7 +36,7 @@ func DBG(t *testing.T) {
 func TestRunIndexerRound(t *testing.T) {
 	gqlInstance := createGraphQLInstance()
 
-	baseInstance := NewIndexerBaseInstance(
+	baseInstance := NewBaseInstance(
 		[]types.Indexer{
 			testIndexer1,
 			testIndexer2,

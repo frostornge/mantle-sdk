@@ -3,6 +3,11 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"time"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	core "github.com/terra-project/core/types"
 	"github.com/terra-project/mantle-sdk/committer"
@@ -12,21 +17,15 @@ import (
 	"github.com/terra-project/mantle-sdk/graph/schemabuilders"
 	"github.com/terra-project/mantle-sdk/indexer"
 	"github.com/terra-project/mantle-sdk/querier"
-	reg "github.com/terra-project/mantle-sdk/registry"
-	"github.com/terra-project/mantle-sdk/types"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"time"
 )
 
 type RemoteMantle struct {
 	db                   db.DB
-	registry             *reg.Registry
+	registry             *indexer.Registry
 	gqlInstance          *graph.RemoteGraphQLInstance
 	depsResolverInstance depsresolver.DepsResolver
 	committerInstance    committer.Committer
-	indexerInstance      *indexer.IndexerBaseInstance
+	indexerInstance      indexer.Instance
 	baseMantleEndpoint   string
 }
 
@@ -43,15 +42,16 @@ type RemoteSyncConfiguration struct {
 func NewRemoteMantle(
 	db db.DB,
 	baseMantleEndpoint string,
-	indexers ...types.IndexerRegisterer,
+	indexers ...indexer.Indexer,
 ) (mantleApp *RemoteMantle) {
 	// create registry of indexers
-	registry := reg.NewRegistry(indexers)
+	registry := indexer.NewRegistry()
+	registry.RegisterIndexer(indexers...)
 
 	// initialize deps resolver -- still required for inter-indexer sync
 	depsResolverInstance := depsresolver.NewDepsResolver()
 
-	querierInstance := querier.NewQuerier(db, registry.KVIndexMap)
+	querierInstance := querier.NewQuerier(db, registry.KVIndexMap())
 
 	// create gql instance w/ remote deps resolver and only the injected indexers
 	gqlInstance := graph.NewRemoteGraphQLInstance(
@@ -59,16 +59,15 @@ func NewRemoteMantle(
 		querierInstance,
 		baseMantleEndpoint,
 		schemabuilders.CreateRemoteModelSchemaBuilder(baseMantleEndpoint),
-		schemabuilders.CreateModelSchemaBuilder(registry.KVIndexMap, registry.Models...),
+		schemabuilders.CreateModelSchemaBuilder(registry.KVIndexMap(), registry.Models()...),
 	)
 
 	// initializer committer
-	committerInstance := committer.NewCommitter(db, registry.KVIndexMap)
+	committerInstance := committer.NewCommitter(db, registry.KVIndexMap())
 
 	// initialize indexer
-	indexerInstance := indexer.NewIndexerBaseInstance(
-		registry.Indexers,
-		registry.IndexerOutputs,
+	indexerInstance := indexer.NewBaseInstance(
+		registry.Indexers(),
 		gqlInstance.QueryInternal,
 		gqlInstance.Commit,
 	)
@@ -125,7 +124,7 @@ func (rmantle *RemoteMantle) Sync(config RemoteSyncConfiguration) {
 		// time
 		tStart := time.Now()
 
-		rmantle.indexerInstance.RunIndexerRound()
+		rmantle.indexerInstance.RunRound()
 		indexerOutputs := rmantle.depsResolverInstance.GetState()
 
 		// dispose deps resolver
