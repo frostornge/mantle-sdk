@@ -8,14 +8,6 @@ type TestQuery struct {
 	}
 }
 
-type TestSliceQuery struct {
-	TestSliceIndexer []TestQuery
-}
-
-type TestMapQuery struct {
-	TestMapIndexer map[string]TestQuery
-}
-
 // single
 var _ Indexer = TestIndexer{}
 
