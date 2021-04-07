@@ -6,7 +6,17 @@ import (
 	"sync"
 )
 
-type DepsResolverInstance struct {
+type DepsResolver interface {
+	SetPredefinedState(interface{})
+	Emit(interface{}) error
+
+	GetState() map[string]interface{}
+	Resolve(reflect.Type) interface{}
+	ResolveLatest(reflect.Type) interface{}
+	Dispose()
+}
+
+type depsResolver struct {
 	mux       sync.RWMutex
 	rmux      sync.RWMutex
 	channels  map[reflect.Type][]chan interface{}
@@ -15,7 +25,7 @@ type DepsResolverInstance struct {
 }
 
 func NewDepsResolver() DepsResolver {
-	return &DepsResolverInstance{
+	return &depsResolver{
 		mux:       sync.RWMutex{},
 		rmux:      sync.RWMutex{},
 		channels:  make(map[reflect.Type][]chan interface{}),
@@ -24,7 +34,7 @@ func NewDepsResolver() DepsResolver {
 	}
 }
 
-func (resolver *DepsResolverInstance) SetPredefinedState(entity interface{}) {
+func (resolver *depsResolver) SetPredefinedState(entity interface{}) {
 	event := getEvent(entity)
 
 	resolver.rmux.Lock()
@@ -33,7 +43,7 @@ func (resolver *DepsResolverInstance) SetPredefinedState(entity interface{}) {
 	resolver.rmux.Unlock()
 }
 
-func (resolver *DepsResolverInstance) Emit(entity interface{}) error {
+func (resolver *depsResolver) Emit(entity interface{}) error {
 	resolver.rmux.Lock()
 	event := getEvent(entity)
 
@@ -60,7 +70,7 @@ func (resolver *DepsResolverInstance) Emit(entity interface{}) error {
 	return nil
 }
 
-func (resolver *DepsResolverInstance) GetState() map[string]interface{} {
+func (resolver *depsResolver) GetState() map[string]interface{} {
 	state := map[string]interface{}{}
 	resolver.rmux.RLock()
 	for key, entity := range resolver.published {
@@ -76,7 +86,7 @@ func (resolver *DepsResolverInstance) GetState() map[string]interface{} {
 }
 
 // Resolver is really just a subscriber
-func (resolver *DepsResolverInstance) Resolve(event reflect.Type) interface{} {
+func (resolver *depsResolver) Resolve(event reflect.Type) interface{} {
 	// check if this event has been delivered already
 	// in such case, get data directly from resolver.published
 	resolver.rmux.RLock()
@@ -99,11 +109,11 @@ func (resolver *DepsResolverInstance) Resolve(event reflect.Type) interface{} {
 	}
 }
 
-func (resolver *DepsResolverInstance) ResolveLatest(event reflect.Type) interface{} {
+func (resolver *depsResolver) ResolveLatest(event reflect.Type) interface{} {
 	return resolver.latest[event]
 }
 
-func (resolver *DepsResolverInstance) Dispose() {
+func (resolver *depsResolver) Dispose() {
 	resolver.rmux.Lock()
 	for _, entity := range resolver.channels {
 		for _, channel := range entity {
