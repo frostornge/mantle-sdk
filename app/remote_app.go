@@ -3,6 +3,11 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"time"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	core "github.com/terra-project/core/types"
 	"github.com/terra-project/mantle-sdk/committer"
@@ -14,10 +19,6 @@ import (
 	"github.com/terra-project/mantle-sdk/querier"
 	reg "github.com/terra-project/mantle-sdk/registry"
 	"github.com/terra-project/mantle-sdk/types"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"time"
 )
 
 type RemoteMantle struct {

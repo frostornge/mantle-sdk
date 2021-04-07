@@ -1,9 +1,10 @@
 package registry
 
 import (
+	"reflect"
+
 	"github.com/terra-project/mantle-sdk/db/kvindex"
 	"github.com/terra-project/mantle-sdk/types"
-	"reflect"
 )
 
 type Registry struct {

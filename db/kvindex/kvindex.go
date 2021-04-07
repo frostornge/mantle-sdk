@@ -2,10 +2,11 @@ package kvindex
 
 import (
 	"fmt"
-	"github.com/terra-project/mantle-sdk/types"
-	"github.com/terra-project/mantle-sdk/utils"
 	"reflect"
 	"regexp"
+
+	"github.com/terra-project/mantle-sdk/types"
+	"github.com/terra-project/mantle-sdk/utils"
 )
 
 type KVIndex struct {

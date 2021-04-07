@@ -2,6 +2,15 @@ package app
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"reflect"
+	"runtime/debug"
+	"sync"
+	"syscall"
+	"time"
+
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/state"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -11,14 +20,6 @@ import (
 	"github.com/terra-project/mantle-sdk/app/middlewares"
 	"github.com/terra-project/mantle-sdk/graph/generate"
 	"github.com/terra-project/mantle-sdk/utils"
-	"log"
-	"os"
-	"os/signal"
-	"reflect"
-	"runtime/debug"
-	"sync"
-	"syscall"
-	"time"
 
 	"github.com/terra-project/mantle-sdk/committer"
 
