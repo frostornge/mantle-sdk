@@ -1,99 +1,112 @@
 package indexer
 
-import (
-	"fmt"
-	"testing"
-
-	"github.com/terra-project/mantle-sdk/graph"
-	"github.com/terra-project/mantle-sdk/types"
-)
-
-type BaseState struct {
+type TestQuery struct {
 	Foo string
-	Bar string
-	Idx int
+	Bar struct {
+		Hello  uint64
+		Mantle string
+	}
 }
 
-func createGraphQLInstance() *graph.GraphQLInstance {
-	var baseState = BaseState{
-		Foo: "foo",
-		Bar: "bar",
-		Idx: 1,
+// single
+var _ Indexer = TestIndexer{}
+
+type TestIndexer struct {
+	Foo string
+	Bar struct {
+		Hello  uint64 `model:"index"`
+		Mantle string `model:"index"`
+	}
+}
+
+func (i TestIndexer) Name() string { return "" }
+func (i TestIndexer) Index(q Querier, c Committer) error {
+	req := TestQuery{}
+	if err := q(&req, nil); err != nil {
+		return err
 	}
 
-	// create gql instance for query resolution
-	gqlInstance := graph.NewGraphQLInstance(baseState)
-	gqlInstance.UpdateState("BaseState", baseState)
-
-	return gqlInstance
-}
-
-func DBG(t *testing.T) {
-	gqlInstance := createGraphQLInstance()
-	gqlInstance.ServeHTTP()
-}
-
-func TestRunIndexerRound(t *testing.T) {
-	gqlInstance := createGraphQLInstance()
-
-	baseInstance := NewIndexerBaseInstance(
-		[]types.Indexer{
-			testIndexer1,
-			testIndexer2,
-		},
-		gqlInstance.ResolveQuery,
-		gqlInstance.Commit,
-	)
-
-	baseInstance.RunIndexerRound()
-
-	states := gqlInstance.ExportStates()
-	fmt.Println(states)
-}
-
-//////////////////////////////////////////
-type TestEntity1 struct {
-	Field1 string
-	Field2 int
-}
-type TestEntity2 struct {
-	Field1 string
-	Field2 TestEntity2SubStruct
-}
-type TestEntity2SubStruct struct {
-	Data string
-}
-
-/// TestIndexer1
-type Test1Query struct {
-	BaseState BaseState
-}
-
-func testIndexer1(query types.Query, commit types.Commit) {
-	request := Test1Query{}
-	query(&request, nil)
-
-	entity := TestEntity1{
-		Field1: request.BaseState.Foo,
-		Field2: request.BaseState.Idx,
-	}
-	commit(entity)
-}
-
-// TestIndexer2
-type TestQuery2 struct {
-	BaseState BaseState
-}
-
-func testIndexer2(query types.Query, commit types.Commit) {
-	request := TestQuery2{}
-	query(&request, nil)
-
-	entity := TestEntity2{
-		Field1: request.BaseState.Foo,
-		Field2: TestEntity2SubStruct{
-			Data: request.BaseState.Bar,
+	entity := TestIndexer{
+		Foo: req.Foo,
+		Bar: struct {
+			Hello  uint64 `model:"index"`
+			Mantle string `model:"index"`
+		}{
+			Hello:  req.Bar.Hello,
+			Mantle: req.Bar.Mantle,
 		},
 	}
-	commit(entity)
+	if err := c(entity); err != nil {
+		return err
+	}
+	return nil
+}
+
+// slice
+var _ Indexer = TestSliceIndexer{}
+
+type TestSliceIndexer []TestIndexer
+
+func (i TestSliceIndexer) Name() string { return "" }
+func (i TestSliceIndexer) Index(q Querier, c Committer) error {
+	var req struct {
+		TestSliceIndexer []TestQuery
+	}
+	if err := q(&req, nil); err != nil {
+		return err
+	}
+
+	var entity TestSliceIndexer
+	for _, r := range req.TestSliceIndexer {
+		entity = append(
+			entity,
+			TestIndexer{
+				Foo: r.Foo,
+				Bar: struct {
+					Hello  uint64 `model:"index"`
+					Mantle string `model:"index"`
+				}{
+					Hello:  r.Bar.Hello,
+					Mantle: r.Bar.Mantle,
+				},
+			},
+		)
+	}
+	if err := c(entity); err != nil {
+		return err
+	}
+	return nil
+}
+
+// map
+var _ Indexer = TestMapIndexer{}
+
+type TestMapIndexer map[string]TestIndexer
+
+func (i TestMapIndexer) Name() string { return "" }
+func (i TestMapIndexer) Index(q Querier, c Committer) error {
+	var req struct {
+		TestMapIndexer map[string]TestQuery
+	}
+	if err := q(&req, nil); err != nil {
+		return err
+	}
+
+	entity := make(TestMapIndexer)
+	for k, r := range req.TestMapIndexer {
+		entity[k] = TestIndexer{
+			Foo: r.Foo,
+			Bar: struct {
+				Hello  uint64 `model:"index"`
+				Mantle string `model:"index"`
+			}{
+				Hello:  r.Bar.Hello,
+				Mantle: r.Bar.Mantle,
+			},
+		}
+	}
+	if err := c(entity); err != nil {
+		return err
+	}
+	return nil
 }

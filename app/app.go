@@ -2,15 +2,6 @@ package app
 
 import (
 	"fmt"
-	abci "github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/state"
-	tmtypes "github.com/tendermint/tendermint/types"
-	TerraApp "github.com/terra-project/core/app"
-	compatapp "github.com/terra-project/mantle-compatibility/app"
-	"github.com/terra-project/mantle-sdk/app/mantlemint"
-	"github.com/terra-project/mantle-sdk/app/middlewares"
-	"github.com/terra-project/mantle-sdk/graph/generate"
-	"github.com/terra-project/mantle-sdk/utils"
 	"log"
 	"os"
 	"os/signal"
@@ -20,6 +11,16 @@ import (
 	"syscall"
 	"time"
 
+	abci "github.com/tendermint/tendermint/abci/types"
+	"github.com/tendermint/tendermint/state"
+	tmtypes "github.com/tendermint/tendermint/types"
+	TerraApp "github.com/terra-project/core/app"
+	compatapp "github.com/terra-project/mantle-compatibility/app"
+	"github.com/terra-project/mantle-sdk/app/mantlemint"
+	"github.com/terra-project/mantle-sdk/app/middlewares"
+	"github.com/terra-project/mantle-sdk/graph/generate"
+	"github.com/terra-project/mantle-sdk/utils"
+
 	"github.com/terra-project/mantle-sdk/committer"
 
 	"github.com/terra-project/mantle-sdk/db"
@@ -28,19 +29,18 @@ import (
 	"github.com/terra-project/mantle-sdk/graph/schemabuilders"
 	"github.com/terra-project/mantle-sdk/indexer"
 	"github.com/terra-project/mantle-sdk/querier"
-	reg "github.com/terra-project/mantle-sdk/registry"
 	"github.com/terra-project/mantle-sdk/subscriber"
 	"github.com/terra-project/mantle-sdk/types"
 )
 
 type Mantle struct {
 	app                  *TerraApp.TerraApp
-	registry             *reg.Registry
+	registry             *indexer.Registry
 	mantlemint           mantlemint.Mantlemint
 	gqlInstance          *graph.GraphQLInstance
 	depsResolverInstance depsresolver.DepsResolver
 	committerInstance    committer.Committer
-	indexerInstance      *indexer.IndexerBaseInstance
+	indexerInstance      indexer.Instance
 	db                   db.DB
 	m                    *sync.Mutex
 }
@@ -60,7 +60,7 @@ var (
 func NewMantle(
 	db db.DB,
 	genesis *tmtypes.GenesisDoc,
-	indexers ...types.IndexerRegisterer,
+	indexers ...indexer.Indexer,
 ) (mantleApp *Mantle) {
 	// wrap db w/ force global_transaction manager
 
@@ -69,11 +69,12 @@ func NewMantle(
 	terraApp := compatapp.NewTerraApp(tmdb)
 
 	// gather outputs of indexer registry
-	registry := reg.NewRegistry(indexers)
+	registry := indexer.NewRegistry()
+	registry.RegisterIndexer(indexers...)
 
 	// initialize gql
 	depsResolverInstance := depsresolver.NewDepsResolver()
-	querierInstance := querier.NewQuerier(db, registry.KVIndexMap)
+	querierInstance := querier.NewQuerier(db, registry.KVIndexMap())
 
 	// instantiate gql
 	gqlInstance := graph.NewGraphQLInstance(
@@ -82,16 +83,15 @@ func NewMantle(
 		schemabuilders.CreateABCIStubSchemaBuilder(terraApp),
 		schemabuilders.CreateMantleStateSchemaBuilder(nil, nil),
 		schemabuilders.CreateModelSchemaBuilder(nil, reflect.TypeOf((*types.BlockState)(nil))),
-		schemabuilders.CreateModelSchemaBuilder(registry.KVIndexMap, registry.Models...),
+		schemabuilders.CreateModelSchemaBuilder(registry.KVIndexMap(), registry.Models()...),
 	)
 
 	// initialize committer
-	committerInstance := committer.NewCommitter(db, registry.KVIndexMap)
+	committerInstance := committer.NewCommitter(db, registry.KVIndexMap())
 
 	// initialize indexer
-	indexerInstance := indexer.NewIndexerBaseInstance(
-		registry.Indexers,
-		registry.IndexerOutputs,
+	indexerInstance := indexer.NewBaseInstance(
+		registry.Indexers(),
 		gqlInstance.QueryInternal,
 		gqlInstance.Commit,
 	)
@@ -180,7 +180,7 @@ func (mantle *Mantle) indexerLifecycle(responses state.ABCIResponses) {
 	mantle.depsResolverInstance.SetPredefinedState(blockState)
 
 	// RunIndexerRound panics when an indexer fails
-	mantle.indexerInstance.RunIndexerRound()
+	mantle.indexerInstance.RunRound()
 
 	// flush states to database
 	// note that indexer outputs are committed __BEFORE__ IAVL
