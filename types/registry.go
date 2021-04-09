@@ -5,7 +5,3 @@ import (
 )
 
 type Model reflect.Type
-type Register func(
-	Indexer,
-	...Model,
-)

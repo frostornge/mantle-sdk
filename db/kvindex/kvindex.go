@@ -17,9 +17,12 @@ type KVIndex struct {
 	indexEntryMap   map[string]IndexEntry
 }
 
-func NewKVIndex(model types.Model) (*KVIndex, error) {
+func NewKVIndex(model types.Model, name string) (*KVIndex, error) {
 	modelType := utils.GetType(model)
-	modelName := modelType.Name()
+	modelName := name
+	if name == "" { // set modelName to Type name
+		modelName = modelType.Name()
+	}
 	indexEntryMap, indexEntryMapErr := createIndexMap(modelType)
 	if indexEntryMapErr != nil {
 		return nil, indexEntryMapErr
